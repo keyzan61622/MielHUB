@@ -5,7 +5,7 @@ local LP = game:GetService("Players").LocalPlayer
 local RS = game:GetService("RunService")
 local net = game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
 
--- Localized Remotes
+-- Mencari Remote
 local RF_Charge = net:WaitForChild("RF/ChargeFishingRod")
 local RF_Start = net:WaitForChild("RF/RequestFishingMinigameStarted")
 local RE_Complete = net:WaitForChild("RE/FishingCompleted")
@@ -14,18 +14,24 @@ local RF_SellAll = net:WaitForChild("RF/SellAllItems")
 local RE_Fav = net:WaitForChild("RE/FavoriteItem")
 local RF_Cancel = net:WaitForChild("RF/CancelFishingInputs")
 
--- Fix Method Localization (Handling 'self')
-local function invoke(remote, ...) return remote:InvokeServer(...) end
-local function fire(remote, ...) remote:FireServer(...) end
+-- ================= HELPER SAKTI (ANTI-ERROR) =================
+-- Fungsi ini otomatis mendeteksi apakah harus pake Invoke atau Fire
+local function send(remote, ...)
+    if remote:IsA("RemoteFunction") then
+        return remote:InvokeServer(...)
+    else
+        remote:FireServer(...)
+    end
+end
 
 -- ================= INISIALISASI UI MielHUB =================
 local Window = UI.New({
     Title = "MielHUB",
-    Subtitle = "Version 1.11 (Final Build)",
+    Subtitle = "Version 1.12 (Console Fix)",
     Theme = "Sunset",
     Size = UDim2.new(0, 580, 0, 420),
     ShowUserInfo = true,
-    ConfigName = "MielHUB_v1_11"
+    ConfigName = "MielHUB_v1_12"
 })
 
 local Config = {
@@ -42,11 +48,11 @@ local Config = {
 
 -- ================= KONEKSI GLOBAL & FLAGS =================
 local brutalConn, kakuConn, idleConn
-local isCharged = false -- Flag untuk optimasi RF_Charge
+local isCharged = false 
 
 -- ================= LOGIC REFACTORED =================
 
--- Scanner Inventory (Stable Heuristic)
+-- Deteksi Tas (Stable)
 local function getInvCount()
     local pGui = LP:FindFirstChild("PlayerGui")
     local mainUI = pGui and pGui:FindFirstChild("MainUI")
@@ -58,7 +64,7 @@ local function getInvCount()
     return 0
 end
 
--- Scanner Favorite (UUID Based)
+-- Mass Favorite
 local function massFavorite()
     local storage = LP:FindFirstChild("Data") and LP.Data:FindFirstChild("Inventory") 
                  or LP:FindFirstChild("Inventory") 
@@ -66,21 +72,21 @@ local function massFavorite()
     
     if storage then
         for _, item in ipairs(storage:GetChildren()) do
-            fire(RE_Fav, item.Name)
+            send(RE_Fav, item.Name)
         end
     end
 end
 
--- ================= TAB MANCING (FINAL BUILD) =================
+-- ================= TAB MANCING (VERSION 1.12 FIX) =================
 local Tab1 = Window:AddTab("Mancing", UI.Icons.Combat)
 
-Tab1:AddSection("Mode Brutal (Maximum Spam)")
+Tab1:AddSection("Mode Brutal (Super Spam No Error)")
 Tab1:AddToggle("Aktifkan Brutal Mode", { Flag = "brutal_on" }, function(v)
     Config.Brutal = v
     if brutalConn then brutalConn:Disconnect() brutalConn = nil end
     
     if v then
-        UI.Pill("MielHUB: Brutal Mode ON")
+        UI.Pill("MielHUB: Brutal Mode Aktif!")
         local accumulator = 0
         isCharged = false
         
@@ -89,43 +95,41 @@ Tab1:AddToggle("Aktifkan Brutal Mode", { Flag = "brutal_on" }, function(v)
             if accumulator >= Config.SpamRate then
                 accumulator = 0
                 
-                -- Optimasi RF_Charge: Hanya panggil jika belum charged
                 if not isCharged then
-                    task.spawn(invoke, RF_Charge)
+                    task.spawn(send, RF_Charge)
                     isCharged = true
                 end
                 
-                -- FireServer (Non-Blocking) untuk spam tercepat
-                fire(RF_Start, -139.63, 0.81, os.clock())
-                fire(RE_Complete)
-                fire(RE_Claim, "Fish")
-                fire(RF_Cancel)
+                -- Perbaikan Final: Menggunakan send() agar otomatis Invoke
+                send(RF_Start, -139.63, 0.81, os.clock())
+                send(RE_Complete)
+                send(RE_Claim, "Fish")
+                send(RF_Cancel)
                 
-                isCharged = false -- Reset flag setelah cancel
+                isCharged = false
             end
         end)
     end
 end)
 
-Tab1:AddSection("Mode Aman (Flag-Based Loop)")
+Tab1:AddSection("Mode Aman (Smart Detect)")
 Tab1:AddInput("Bait Delay", function(t) Config.Reel = tonumber(t) or 0.00001 end)
 Tab1:AddInput("Catch Delay", function(t) Config.Catch = tonumber(t) or 0.57 end)
 Tab1:AddToggle("Mancing Normal", { Flag = "safe_on" }, function(v)
-    Config.Safe = v -- Menggunakan flag, bukan task.cancel untuk stabilitas
-    
+    Config.Safe = v
     if v then
         task.spawn(function()
             while Config.Safe do
-                invoke(RF_Charge)
+                send(RF_Charge)
                 task.wait(Config.Reel)
                 
-                -- Perbaikan: RF_Start menggunakan fire() agar konsisten
-                fire(RF_Start, -139.63, 0.81, os.clock())
+                -- Menggunakan send() agar tidak error FireServer lagi
+                send(RF_Start, -139.63, 0.81, os.clock())
                 task.wait(Config.Catch)
                 
-                fire(RE_Complete)
-                fire(RE_Claim, "Fish")
-                fire(RF_Cancel)
+                send(RE_Complete)
+                send(RE_Claim, "Fish")
+                send(RF_Cancel)
                 task.wait()
             end
         end)
@@ -151,18 +155,17 @@ Tab2:AddToggle("Auto Jual Saat Penuh", { Flag = "sale_on" }, function(v)
     task.spawn(function()
         while Config.Sale do
             if getInvCount() >= Config.Cap then
-                invoke(RF_SellAll)
-                UI.Pill("Jual Otomatis Berhasil!")
+                send(RF_SellAll)
+                UI.Pill("MielHUB: Berhasil Jual Semua!")
             end
             task.wait(15)
         end
     end)
 end)
 
--- ================= TAB LAINNYA & TELEPORT =================
+-- ================= TAB SISTEM & TELEPORT =================
 local Tab3 = Window:AddTab("Sistem", UI.Icons.Settings)
-
-Tab3:AddToggle("Kaku Mode (No-Anim)", { Flag = "n_on" }, function(v)
+Tab3:AddToggle("Kaku Mode", { Flag = "n_on" }, function(v)
     Config.Kaku = v
     if kakuConn then kakuConn:Disconnect() kakuConn = nil end
     if v then
@@ -177,7 +180,7 @@ Tab3:AddToggle("Kaku Mode (No-Anim)", { Flag = "n_on" }, function(v)
     end
 end)
 
-Tab3:AddButton("Aktifkan Anti-AFK", function()
+Tab3:AddButton("Anti-AFK", function()
     if idleConn then idleConn:Disconnect() end
     idleConn = LP.Idled:Connect(function()
         game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
@@ -188,22 +191,14 @@ Tab3:AddButton("Aktifkan Anti-AFK", function()
 end)
 
 local Tab4 = Window:AddTab("Pulau", UI.Icons.Teleport)
+Tab4:AddSection("List Pulau")
 Tab4:AddButton("Esoteric Depths", function() tp(3100.81, -1302.73, 1462.32) end)
 Tab4:AddButton("Sandy Bay", function() tp(35.82, 9.64, 2803.89) end)
 Tab4:AddButton("Frozen Fjord", function() tp(1012.64, 23.53, 5077.73) end)
-Tab4:AddButton("Kohana Volcano", function() tp(-596.68, 60.47, 104.55) end)
-Tab4:AddButton("Ancient Jungle", function() tp(1470.78, 5.37, -326.65) end)
-Tab4:AddButton("Sacred Temple", function() tp(1477.36, -21.52, -649.19) end)
 Tab4:AddButton("The Abyss 1", function() tp(6049.66, -538.60, 4358.95) end)
 Tab4:AddButton("The Abyss 2", function() tp(6100.35, -585.48, 4685.32) end)
-Tab4:AddButton("Crater Island", function() tp(-1514.61, 5.43, 1891.73) end)
-Tab4:AddButton("Lost Isle", function() tp(-2786.48, 8.47, 2128.80) end)
-Tab4:AddButton("Coral Reef", function() tp(-2099.63, 5.95, 3696.73) end)
-Tab4:AddButton("Deepwater Cavern", function() tp(-3696.02, -134.59, -1011.64) end)
-Tab4:AddButton("Underground Cellar", function() tp(-3604.98, -266.76, -1580.89) end)
 Tab4:AddButton("Christmas Island", function() tp(1136.97, 23.60, 1561.87) end)
 
--- ================= PEMSIHAN AKHIR =================
 Tab3:AddDangerButton("Matikan Script", function() 
     Config.Brutal, Config.Safe, Config.Kaku = false, false, false
     if brutalConn then brutalConn:Disconnect() end
@@ -216,4 +211,4 @@ if UI.IsMobile then
     UI.FloatingButton({ Icon = UI.Logos.XanBar, Draggable = true, Callback = function() Window:Toggle() end })
 end
 
-UI.Splash({ Title = "MielHUB", Subtitle = "Absolute v1.11 Final Build", Duration = 2 })
+UI.Splash({ Title = "MielHUB", Subtitle = "v1.12 Console Validated", Duration = 2 })
