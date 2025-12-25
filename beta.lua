@@ -5,7 +5,7 @@ local LP = game:GetService("Players").LocalPlayer
 local RS = game:GetService("RunService")
 local net = game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
 
--- Mencari Remote Berdasarkan Log SimpleSpy
+-- Remote Sesuai SimpleSpy
 local RF_Charge = net:WaitForChild("RF/ChargeFishingRod")
 local RF_Start = net:WaitForChild("RF/RequestFishingMinigameStarted")
 local RE_Complete = net:WaitForChild("RE/FishingCompleted")
@@ -26,53 +26,39 @@ end
 -- ================= INISIALISASI UI =================
 local Window = UI.New({
     Title = "MielHUB",
-    Subtitle = "Version 1.20 (Extreme)",
+    Subtitle = "Version 1.21 (Custom Turbo)",
     Theme = "Sunset",
     Size = UDim2.new(0, 580, 0, 420),
     ShowUserInfo = true,
-    ConfigName = "MielHUB_v1_20"
+    ConfigName = "MielHUB_v1_21"
 })
 
 local Config = {
-    Mode = "None", -- Legit, Instant, Blatant
+    Mode = "None",
     Sale = false,
     Fav = false,
     Kaku = false,
-    -- Delays
+    -- Custom Delays
     L_Reel = 1.5, L_Minigame = 2.0,
     I_Reel = 0.5, I_Catch = 0.1,
-    B_Reel = 0.01, B_Catch = 0.01,
+    B_Reel = 0.05, B_Catch = 0.05, -- Default Blatant (Adjustable)
     -- Farming
     MinRarity = "Legendary",
     Cap = 1000,
     Interval = 60
 }
 
-local fishingThread, brutalConn, kakuConn
+local fishingThread
 
--- ================= LOGIC KAKU & RECOVERY =================
+-- ================= LOGIC UTAMA =================
 
 local function stopAllFishing()
     Config.Mode = "None"
     if fishingThread then task.cancel(fishingThread) fishingThread = nil end
-    if brutalConn then brutalConn:Disconnect() brutalConn = nil end
     UI.Pill("Semua Fitur Mancing Dihentikan!")
 end
 
-RS.Heartbeat:Connect(function()
-    if Config.Kaku then
-        local char = LP.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        local anim = hum and hum:FindFirstChildOfClass("Animator")
-        if anim then
-            for _, t in ipairs(anim:GetPlayingAnimationTracks()) do t:Stop(0) end
-        end
-    end
-end)
-
--- ================= LOGIC FARMING =================
-
--- Scanner Inventory
+-- Deteksi Isi Tas
 local function getInvCount()
     local pGui = LP:FindFirstChild("PlayerGui")
     local mainUI = pGui and pGui:FindFirstChild("MainUI")
@@ -84,14 +70,13 @@ local function getInvCount()
     return 0
 end
 
--- Auto Favorite dengan 6 Rarity
+-- Auto Favorite (6 Rarity)
 local function massFavorite()
     local storage = LP:FindFirstChild("Data") and LP.Data:FindFirstChild("Inventory") or LP:FindFirstChild("Backpack")
     local rarityList = {["Common"]=1, ["Uncommon"]=2, ["Rare"]=3, ["Legendary"]=4, ["Mythic"]=5, ["Secret"]=6}
     
     if storage then
         for _, item in ipairs(storage:GetChildren()) do
-            -- Logika: Ambil rarity ikan dari atribut/value (Asumsi data ada di objek)
             local itemRarity = item:FindFirstChild("Rarity") and item.Rarity.Value or "Common"
             if rarityList[itemRarity] and rarityList[itemRarity] >= rarityList[Config.MinRarity] then
                 send(RE_Fav, item.Name)
@@ -100,14 +85,30 @@ local function massFavorite()
     end
 end
 
--- ================= TAB FISHING =================
+-- Kaku Mode
+RS.Heartbeat:Connect(function()
+    if Config.Kaku then
+        local char = LP.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local anim = hum and hum:FindFirstChildOfClass("Animator")
+        if anim then for _, t in ipairs(anim:GetPlayingAnimationTracks()) do t:Stop(0) end end
+    end
+end)
+
+local function tp(x, y, z)
+    if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
+        LP.Character.HumanoidRootPart.CFrame = CFrame.new(x, y, z)
+    end
+end
+
+-- ================= TAB FISHING (ADJUSTABLE) =================
 local Tab1 = Window:AddTab("Mancing", UI.Icons.Combat)
 
--- 1. LEGIT FISHING
-Tab1:AddSection("1. Legit Fishing (Mancing Biasa)")
-Tab1:AddInput("Delay Lempar (Reel)", function(t) Config.L_Reel = tonumber(t) or 1.5 end)
+-- 1. LEGIT
+Tab1:AddSection("1. Legit Fishing (Mancing Aman)")
+Tab1:AddInput("Delay Lempar", function(t) Config.L_Reel = tonumber(t) or 1.5 end)
 Tab1:AddInput("Delay Minigame", function(t) Config.L_Minigame = tonumber(t) or 2.0 end)
-Tab1:AddToggle("Aktifkan Legit Mode", { Flag = "legit_on" }, function(v)
+Tab1:AddToggle("Aktifkan Legit", { Flag = "legit_on" }, function(v)
     if v then 
         stopAllFishing()
         Config.Mode = "Legit"
@@ -124,11 +125,11 @@ Tab1:AddToggle("Aktifkan Legit Mode", { Flag = "legit_on" }, function(v)
     else stopAllFishing() end
 end)
 
--- 2. INSTANT FISHING
-Tab1:AddSection("2. Instant Fishing (Tanpa Minigame)")
+-- 2. INSTANT
+Tab1:AddSection("2. Instant Fishing (No Minigame)")
 Tab1:AddInput("Delay Reel", function(t) Config.I_Reel = tonumber(t) or 0.5 end)
 Tab1:AddInput("Delay Catch", function(t) Config.I_Catch = tonumber(t) or 0.1 end)
-Tab1:AddToggle("Aktifkan Instant Mode", { Flag = "inst_on" }, function(v)
+Tab1:AddToggle("Aktifkan Instant", { Flag = "inst_on" }, function(v)
     if v then
         stopAllFishing()
         Config.Mode = "Instant"
@@ -146,22 +147,26 @@ Tab1:AddToggle("Aktifkan Instant Mode", { Flag = "inst_on" }, function(v)
     else stopAllFishing() end
 end)
 
--- 3. BLATANT FISHING (SPAM)
-Tab1:AddSection("3. Blatant Fishing (Super Spam)")
-Tab1:AddInput("Spam Reel", function(t) Config.B_Reel = tonumber(t) or 0.01 end)
-Tab1:AddInput("Spam Complete", function(t) Config.B_Catch = tonumber(t) or 0.01 end)
-Tab1:AddToggle("Aktifkan Blatant Mode", { Flag = "brutal_on" }, function(v)
+-- 3. BLATANT (SPAM ADJUSTABLE)
+Tab1:AddSection("3. Blatant Fishing (Turbo Spam)")
+Tab1:AddInput("Blatant Reel Delay", function(t) Config.B_Reel = tonumber(t) or 0.05 end)
+Tab1:AddInput("Blatant Catch Delay", function(t) Config.B_Catch = tonumber(t) or 0.05 end)
+Tab1:AddToggle("Aktifkan Blatant (SPAM)", { Flag = "brutal_on" }, function(v)
     if v then
         stopAllFishing()
         Config.Mode = "Blatant"
-        UI.Pill("Brutal Spam Aktif!")
-        brutalConn = RS.Heartbeat:Connect(function()
-            if Config.Mode ~= "Blatant" then brutalConn:Disconnect() return end
-            task.spawn(send, RF_Charge)
-            send(RF_Start, -139.63, 0.81, os.clock())
-            send(RE_Complete)
-            send(RE_Claim, "Fish")
-            send(RF_Cancel)
+        UI.Pill("Mode Spam Aktif!")
+        fishingThread = task.spawn(function()
+            while Config.Mode == "Blatant" do
+                task.spawn(send, RF_Charge)
+                task.wait(Config.B_Reel) -- Menggunakan input user agar tidak narik angin
+                send(RF_Start, -139.63, 0.81, os.clock())
+                task.wait(Config.B_Catch) -- Menggunakan input user agar pas saat complete
+                send(RE_Complete)
+                send(RE_Claim, "Fish")
+                send(RF_Cancel)
+                task.wait() 
+            end
         end)
     else stopAllFishing() end
 end)
@@ -169,8 +174,8 @@ end)
 -- ================= TAB FARMING =================
 local Tab2 = Window:AddTab("Farming", UI.Icons.Home)
 
-Tab2:AddSection("Auto Favorite (6 Rarity)")
-Tab2:AddDropdown("Simpan Rarity Minimum", {"Common", "Uncommon", "Rare", "Legendary", "Mythic", "Secret"}, function(v) 
+Tab2:AddSection("Auto Favorite (6 Kelangkaan)")
+Tab2:AddDropdown("Min Rarity Untuk Simpan", {"Common", "Uncommon", "Rare", "Legendary", "Mythic", "Secret"}, function(v) 
     Config.MinRarity = v 
 end)
 Tab2:AddToggle("Aktifkan Auto Favorite", { Flag = "fav_on" }, function(v)
@@ -183,7 +188,7 @@ Tab2:AddToggle("Aktifkan Auto Favorite", { Flag = "fav_on" }, function(v)
     end)
 end)
 
-Tab2:AddSection("Auto Sale (Perbaikan Sistem)")
+Tab2:AddSection("Auto Jual (Market)")
 Tab2:AddInput("Jual Tiap (Menit)", function(t) Config.Interval = tonumber(t) or 60 end)
 Tab2:AddInput("Jual Saat Isi Tas", function(t) Config.Cap = tonumber(t) or 1000 end)
 Tab2:AddToggle("Aktifkan Auto Jual", { Flag = "sale_on" }, function(v)
@@ -192,11 +197,10 @@ Tab2:AddToggle("Aktifkan Auto Jual", { Flag = "sale_on" }, function(v)
         task.spawn(function()
             local lastS = tick()
             while Config.Sale do
-                local passed = (tick() - lastS) / 60
-                if passed >= Config.Interval or getInvCount() >= Config.Cap then
+                if (tick() - lastS) / 60 >= Config.Interval or getInvCount() >= Config.Cap then
                     send(RF_SellAll)
                     lastS = tick()
-                    UI.Pill("Barang Berhasil Terjual!")
+                    UI.Pill("Ikan Berhasil Terjual!")
                 end
                 task.wait(15)
             end
@@ -208,12 +212,11 @@ end)
 local Tab3 = Window:AddTab("Sistem", UI.Icons.Settings)
 
 Tab3:AddSection("Pemulihan")
-Tab3:AddButton("RECOVERY FISHING (Reset Semua)", stopAllFishing)
+Tab3:AddButton("RECOVERY FISHING (Reset)", stopAllFishing)
 
 Tab3:AddSection("Utility")
-Tab3:AddToggle("Kaku Mode (No-Anim)", { Flag = "n_on" }, function(v) Config.Kaku = v end)
-Tab3:AddKeybind("Tombol Menu", { Default = Enum.KeyCode.RightControl }, function() Window:Toggle() end)
-
+Tab3:AddToggle("Kaku Mode", { Flag = "n_on" }, function(v) Config.Kaku = v end)
+Tab3:AddKeybind("Buka Menu", { Default = Enum.KeyCode.RightControl }, function() Window:Toggle() end)
 Tab3:AddButton("Anti-AFK", function()
     LP.Idled:Connect(function()
         game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
@@ -228,11 +231,11 @@ Tab4:AddButton("Esoteric Depths", function() tp(3100.81, -1302.73, 1462.32) end)
 Tab4:AddButton("The Abyss 1", function() tp(6049.66, -538.60, 4358.95) end)
 Tab4:AddButton("Christmas Island", function() tp(1136.97, 23.60, 1561.87) end)
 
-Tab3:AddDangerButton("Matikan Script", function() UI.Unload() end)
+Tab3:AddDangerButton("Matikan MielHUB", function() UI.Unload() end)
 
--- MOBILE SUPPORT
+-- MOBILE
 if UI.IsMobile then
     UI.FloatingButton({ Icon = UI.Logos.XanBar, Draggable = true, Callback = function() Window:Toggle() end })
 end
 
-UI.Splash({ Title = "MielHUB", Subtitle = "v1.20 Extreme Edition", Duration = 2 })
+UI.Splash({ Title = "MielHUB", Subtitle = "v1.21 Custom Turbo", Duration = 2 })
