@@ -3,49 +3,61 @@ local UI = loadstring(game:HttpGet("https://xan.bar/init.lua"))()
 -- ================= REMOTE ASLI (SIMPLESPY UPDATED) =================
 local LP = game:GetService("Players").LocalPlayer
 local RS = game:GetService("RunService")
-local net = game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local net = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
 
--- Localized Remotes for Absolute Speed
+-- Localized Remotes
 local RF_Charge = net:WaitForChild("RF/ChargeFishingRod")
 local RF_Start = net:WaitForChild("RF/RequestFishingMinigameStarted")
 local RE_Complete = net:WaitForChild("RE/FishingCompleted")
 local RE_Claim = net:WaitForChild("RE/ClaimNotification")
 local RF_SellAll = net:WaitForChild("RF/SellAllItems")
 local RE_Fav = net:WaitForChild("RE/FavoriteItem")
+local RF_Cancel = net:WaitForChild("RF/CancelFishingInputs")
 
--- Method Localization (Branchless Hot-Path)
 local invoke = RF_Charge.InvokeServer
 local fire = RE_Complete.FireServer
-local twait = task.wait
+local wait = task.wait
 local clock = os.clock
 
--- ================= WINDOW INITIALIZATION =================
+-- ================= WINDOW MielHUB v1.00 =================
 local Window = UI.New({
     Title = "MielHUB",
-    Subtitle = "Version 1.0",
+    Subtitle = "Version 1.00",
     Theme = "Sunset",
     Size = UDim2.new(0, 580, 0, 420),
     ShowUserInfo = true,
     ConfigName = "MielHUB_Config"
 })
 
-local Defaults = { Reel = 0.00001, Catch = 0.57 }
 local Config = {
-    B = false, -- Fishing Toggle
-    S = false, -- Sale Toggle
-    F = false, -- Favorite Toggle
-    N = false, -- NoAnim Toggle
-    Reel = Defaults.Reel,
-    Catch = Defaults.Catch,
-    Interval = 60,
-    Cap = 1000,
-    MinRar = "Legendary",
-    FavNames = {"Secret", "Crystal", "Golden"}
+    B = false, -- Fishing
+    S = false, -- Sale
+    F = false, -- Favorite
+    N = false, -- NoAnim
+    Reel = 0.00001,
+    Catch = 0.57,
+    Cap = 1000
 }
 
--- ================= LOGIC FUNCTIONS =================
+-- ================= LOGIC AUTO FAVORITE & SALE =================
 
--- Scanner Kapasitas Tas (Smart Pattern)
+-- Fungsi mencari ID Ikan secara massal untuk Auto Favorite
+local function massFavorite()
+    -- Scanner mencari folder data replion atau backpack
+    local inventoryData = LP:FindFirstChild("Data") and LP.Data:FindFirstChild("Inventory") 
+                       or LP:FindFirstChild("Backpack")
+    
+    if inventoryData then
+        for _, item in pairs(inventoryData:GetChildren()) do
+            -- Mengirim UUID ikan ke server sesuai log SimpleSpy
+            -- UUID biasanya disimpan di properti Name atau Value ikan tersebut
+            RE_Fav:FireServer(item.Name)
+        end
+    end
+end
+
+-- Scanner isi tas dari UI
 local function getInvCount()
     for _, v in pairs(LP.PlayerGui:GetDescendants()) do
         if v:IsA("TextLabel") and v.Visible and v.Text:find("/") then
@@ -56,30 +68,13 @@ local function getInvCount()
     return 0
 end
 
--- Auto Favorite Logic: Mencari data ikan di inventory
-local function autoFavProcess()
-    -- Mencoba mencari folder data ikan (biasanya di LP.Data atau LP.Inventory)
-    local invPath = LP:FindFirstChild("Data") and LP.Data:FindFirstChild("Inventory") 
-                 or LP:FindFirstChild("Inventory")
-    
-    if invPath then
-        for _, fish in pairs(invPath:GetChildren()) do
-            -- Logika: Jika ikan belum di-favorite dan masuk kriteria
-            -- (Pengecekan rarity/name tergantung struktur Value di dalam objek fish)
-            RE_Fav:FireServer(fish.Name) -- Menggunakan Name/ID sesuai SimpleSpy
-        end
-    end
-end
-
--- No-Animation (Kaku Total)
+-- Kaku Mode (No-Animation)
 RS.Heartbeat:Connect(function()
     if Config.N then
         local char = LP.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         local anim = hum and hum:FindFirstChildOfClass("Animator")
-        if anim then
-            for _, t in ipairs(anim:GetPlayingAnimationTracks()) do t:Stop(0) end
-        end
+        if anim then for _, t in ipairs(anim:GetPlayingAnimationTracks()) do t:Stop(0) end end
     end
 end)
 
@@ -89,87 +84,79 @@ local function tp(x, y, z)
     end
 end
 
--- ================= TAB FISHING (TURBO) =================
-local reelVal, catchVal = Defaults.Reel, Defaults.Catch
+-- ================= TAB FISHING (SPAM NO DELAY) =================
 local fishingThread
 
 local function fishingLoop()
     while true do
         invoke(RF_Charge)
-        twait(reelVal)
-
-        -- Argumen Posisi, Power, dan Tick sesuai SimpleSpy kamu
+        wait(Config.Reel)
+        
+        -- Spam RequestFishing tanpa delay sesuai permintaanmu
         invoke(RF_Start, -139.63, 0.81, clock())
-        twait(catchVal)
-
+        wait(Config.Catch)
+        
         fire(RE_Complete)
-        RE_Claim:FireServer("Fish") -- Langsung klaim biar notif hilang
-        twait() 
+        RE_Claim:FireServer("Fish")
+        invoke(RF_Cancel) -- Menghapus input fishing agar bisa spam ulang lebih cepat
+        wait() 
     end
 end
 
 local Tab1 = Window:AddTab("Fishing", UI.Icons.Combat)
-Tab1:AddSection("Turbo Engine Control")
-Tab1:AddInput("Bait Speed", function(t) Config.Reel = tonumber(t) or Defaults.Reel end)
-Tab1:AddInput("Catch Speed", function(t) Config.Catch = tonumber(t) or Defaults.Catch end)
+Tab1:AddSection("Turbo Fishing Engine")
+Tab1:AddInput("Bait Speed", function(t) Config.Reel = tonumber(t) or 0.00001 end)
+Tab1:AddInput("Catch Speed", function(t) Config.Catch = tonumber(t) or 0.57 end)
 
-Tab1:AddToggle("EXTREME SPEED (NO DELAY)", { Flag = "b_on" }, function(v)
+Tab1:AddToggle("Aktifkan Mancing (No Delay)", { Flag = "b_on" }, function(v)
     Config.B = v
     if v and not fishingThread then
-        reelVal, catchVal = Config.Reel, Config.Catch
         fishingThread = task.spawn(fishingLoop)
-        UI.Pill("Turbo Engaged!")
+        UI.Pill("MielHUB Fishing Aktif!")
     elseif not v and fishingThread then
         task.cancel(fishingThread)
         fishingThread = nil
-        UI.Pill("Turbo Stopped")
+        UI.Pill("MielHUB Fishing Mati")
     end
 end)
 
--- ================= TAB FARMING (SALE & FAV) =================
+-- ================= TAB FARMING (AUTO SALE & FAV) =================
 local Tab2 = Window:AddTab("Farming", UI.Icons.Home)
 
-Tab2:AddSection("Auto Favorite (Save Items)")
-Tab2:AddDropdown("Min Rarity", {"Common", "Rare", "Epic", "Legendary", "Mythic", "Secret"}, function(v) Config.MinRar = v end)
-Tab2:AddToggle("Auto Favorite Enabled", { Flag = "f_on" }, function(v) 
-    Config.F = v 
+Tab2:AddSection("Auto Favorite (Multiple Select)")
+Tab2:AddToggle("Otomatis Favorit Ikan Baru", { Flag = "f_on" }, function(v)
+    Config.F = v
     if v then
         task.spawn(function()
             while Config.F do
-                autoFavProcess()
-                twait(30) -- Scan favorit tiap 30 detik
+                massFavorite()
+                wait(5) -- Scan setiap 5 detik agar tidak lag
             end
         end)
     end
 end)
 
-Tab2:AddSection("Official Auto Sale")
-Tab2:AddInput("Interval (Menit)", function(t) Config.Interval = tonumber(t) or 60 end)
-Tab2:AddInput("Kapasitas Tas", function(t) Config.Cap = tonumber(t) or 1000 end)
-
-Tab2:AddToggle("Enable Auto Sale", { Flag = "s_on" }, function(v)
+Tab2:AddSection("Auto Sale System")
+Tab2:AddInput("Kapasitas Tas (Jual Saat Penuh)", function(t) Config.Cap = tonumber(t) or 1000 end)
+Tab2:AddToggle("Aktifkan Auto Jual", { Flag = "s_on" }, function(v)
     Config.S = v
     if v then
-        UI.Success("Auto Sale Active")
+        UI.Success("Auto Sale Aktif")
         task.spawn(function()
-            local lastS = tick()
             while Config.S do
-                local passed = (tick() - lastS) / 60
-                -- Jual jika waktu habis ATAU tas penuh sesuai kapasitas input
-                if (Config.Interval > 0 and passed >= Config.Interval) or (getInvCount() >= Config.Cap) then
-                    RF_SellAll:InvokeServer() -- Menggunakan Remote SellAll asli
-                    lastS = tick()
-                    UI.Pill("All Items Sold!")
+                if getInvCount() >= Config.Cap then
+                    RF_SellAll:InvokeServer()
+                    UI.Pill("Tas Penuh, Berhasil Jual Semua!")
                 end
-                twait(10)
+                wait(10)
             end
         end)
     end
 end)
 
--- ================= TAB TELEPORT (LENGKAP) =================
+-- ================= TAB TELEPORT (14 PULAU) =================
 local Tab3 = Window:AddTab("Teleport", UI.Icons.Teleport)
-Tab3:AddSection("14 Islands")
+Tab3:AddSection("Daftar Pulau")
 Tab3:AddButton("Esoteric Depths", function() tp(3100.81, -1302.73, 1462.32) end)
 Tab3:AddButton("Sandy Bay", function() tp(35.82, 9.64, 2803.89) end)
 Tab3:AddButton("Frozen Fjord", function() tp(1012.64, 23.53, 5077.73) end)
@@ -185,30 +172,26 @@ Tab3:AddButton("Deepwater Cavern", function() tp(-3696.02, -134.59, -1011.64) en
 Tab3:AddButton("Underground Cellar", function() tp(-3604.98, -266.76, -1580.89) end)
 Tab3:AddButton("Christmas Island", function() tp(1136.97, 23.60, 1561.87) end)
 
--- ================= TAB MISC =================
-local Tab4 = Window:AddTab("Misc", UI.Icons.Refresh)
-Tab4:AddButton("RESTORE FISHING", function()
-    Config.B, Config.S, Config.F = false, false, false
-    if fishingThread then task.cancel(fishingThread); fishingThread = nil end
-    UI.Notify({ Title = "Restored!", Content = "All loops stopped.", Duration = 3 })
-end)
+-- ================= TAB MISC & SETTINGS =================
+local Tab4 = Window:AddTab("Misc", UI.Icons.Settings)
+Tab4:AddSection("Pengaturan")
+Tab4:AddToggle("Mode Kaku (No Anim)", { Flag = "n_on" }, function(v) Config.N = v end)
+Tab4:AddKeybind("Tombol Buka UI", { Default = Enum.KeyCode.RightControl }, function() Window:Toggle() end)
 
-Tab4:AddSection("System")
-Tab4:AddKeybind("Toggle UI", { Default = Enum.KeyCode.RightControl }, function() Window:Toggle() end)
-Tab4:AddToggle("Kaku Mode", { Flag = "n_on" }, function(v) Config.N = v end)
-Tab4:AddButton("Anti-AFK", function()
+Tab4:AddButton("Aktifkan Anti-AFK", function()
     LP.Idled:Connect(function()
         game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-        twait(1)
+        wait(1)
         game:GetService("VirtualUser"):Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
     end)
-    UI.Success("Anti-AFK Active")
+    UI.Success("Anti-AFK Aktif")
 end)
-Tab4:AddDangerButton("Unload Script", function() UI.Unload() end)
+
+Tab4:AddDangerButton("Matikan Script", function() UI.Unload() end)
 
 -- MOBILE SUPPORT
 if UI.IsMobile then
     UI.FloatingButton({ Icon = UI.Logos.XanBar, Draggable = true, Callback = function() Window:Toggle() end })
 end
 
-UI.Splash({ Title = "SMK Fishing Mod", Subtitle = "Official Final v16.0", Duration = 2 })
+UI.Splash({ Title = "MielHUB", Subtitle = "Absolute v1.00 Loaded", Duration = 2 })
