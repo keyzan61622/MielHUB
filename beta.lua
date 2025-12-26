@@ -26,11 +26,11 @@ end
 -- ================= INISIALISASI UI =================
 local Window = UI.New({
     Title = "MielHUB",
-    Subtitle = "Version 1.35 (State Machine)",
+    Subtitle = "Version 1.60 (Stable Final)",
     Theme = "Sunset",
     Size = UDim2.new(0, 580, 0, 420),
     ShowUserInfo = true,
-    ConfigName = "MielHUB_v1_35"
+    ConfigName = "MielHUB_v1_60"
 })
 
 local Config = {
@@ -55,12 +55,14 @@ local Config = {
 local fishingThread, blatantConn, kakuConn
 local phase = 0
 local timer = 0
+local busy = false -- Tambahan: Anti-Macet untuk PC (Xeno)
 
 -- ================= FUNGSI PEMULIHAN =================
 local function stopAllFishing()
     Config.Mode = "None"
     phase = 0
     timer = 0
+    busy = false
     if fishingThread then task.cancel(fishingThread) fishingThread = nil end
     if blatantConn then blatantConn:Disconnect() blatantConn = nil end
     send(RF_Cancel)
@@ -74,7 +76,7 @@ local Tab1 = Window:AddTab("Mancing", UI.Icons.Combat)
 Tab1:AddSection("1. Legit Fishing")
 Tab1:AddInput("Lempar Delay", function(t) Config.L_Reel = tonumber(t) or 1.5 end)
 Tab1:AddInput("Mini Delay", function(t) Config.L_Mini = tonumber(t) or 2.0 end)
-Tab1:AddToggle("Aktifkan Legit", { Flag = "l_on" }, function(v)
+local legitToggle = Tab1:AddToggle("Aktifkan Legit", { Flag = "l_on" }, function(v)
     if v then 
         stopAllFishing()
         Config.Mode = "Legit"
@@ -90,12 +92,13 @@ Tab1:AddToggle("Aktifkan Legit", { Flag = "l_on" }, function(v)
         end)
     else stopAllFishing() end
 end)
+Tab1:AddKeybind("Shortcut Legit", { Default = Enum.KeyCode.J }, function() legitToggle:Set(not legitToggle.Value) end)
 
 -- 2. INSTANT
 Tab1:AddSection("2. Instant Fishing")
 Tab1:AddInput("Inst Reel", function(t) Config.I_Reel = tonumber(t) or 0.5 end)
 Tab1:AddInput("Inst Catch", function(t) Config.I_Catch = tonumber(t) or 0.1 end)
-Tab1:AddToggle("Aktifkan Instant", { Flag = "i_on" }, function(v)
+local instToggle = Tab1:AddToggle("Aktifkan Instant", { Flag = "i_on" }, function(v)
     if v then
         stopAllFishing()
         Config.Mode = "Instant"
@@ -112,51 +115,51 @@ Tab1:AddToggle("Aktifkan Instant", { Flag = "i_on" }, function(v)
         end)
     else stopAllFishing() end
 end)
+Tab1:AddKeybind("Shortcut Instant", { Default = Enum.KeyCode.K }, function() instToggle:Set(not instToggle.Value) end)
 
--- 3. BLATANT V3 (TRUE ADJUSTABLE SPAM)
+-- 3. BLATANT V3 (TRUE ADJUSTABLE SPAM + BUSY FLAG)
 Tab1:AddSection("3. Blatant V3 (State Machine)")
 Tab1:AddInput("Reel Delay", function(v) Config.B_Reel = tonumber(v) or 0.2 end)
 Tab1:AddInput("Complete Delay", function(v) Config.B_Complete = tonumber(v) or 0.1 end)
 Tab1:AddInput("Cancel Delay", function(v) Config.B_Cancel = tonumber(v) or 0.05 end)
 
-Tab1:AddToggle("Aktifkan Blatant (FAST)", { Flag = "b_on" }, function(v)
+local blatantToggle = Tab1:AddToggle("Aktifkan Blatant (FAST)", { Flag = "b_on" }, function(v)
     if blatantConn then blatantConn:Disconnect() blatantConn = nil end
     if v then
         stopAllFishing()
         Config.Mode = "Blatant"
         UI.Pill("Blatant SUPER FAST Aktif")
-        phase = 0
-        timer = 0
+        phase = 0; timer = 0; busy = false
         
-        -- State Machine Loop (Zero blocking)
+        -- State Machine Loop (PC & HP Optimized)
         blatantConn = RS.Heartbeat:Connect(function(dt)
+            if busy then return end -- Mencegah tumpukan request di PC
             timer = timer + dt
             
             -- Fase 0: Charge Joran
             if phase == 0 then
-                send(RF_Charge)
-                phase = 1
-                timer = 0
+                busy = true
+                task.spawn(function() send(RF_Charge); busy = false end)
+                phase = 1; timer = 0
             -- Fase 1: Tunggu Reel Delay -> Lempar (Start)
             elseif phase == 1 and timer >= Config.B_Reel then
-                send(RF_Start, -139.63, 0.81, os.clock())
-                phase = 2
-                timer = 0
+                busy = true
+                task.spawn(function() send(RF_Start, -139.63, 0.81, os.clock()); busy = false end)
+                phase = 2; timer = 0
             -- Fase 2: Tunggu Complete Delay -> Tarik (Complete)
             elseif phase == 2 and timer >= Config.B_Complete then
                 send(RE_Complete)
                 send(RE_Claim, "Fish")
-                phase = 3
-                timer = 0
+                phase = 3; timer = 0
             -- Fase 3: Tunggu Cancel Delay -> Reset Sistem
             elseif phase == 3 and timer >= Config.B_Cancel then
                 send(RF_Cancel)
-                phase = 0
-                timer = 0
+                phase = 0; timer = 0
             end
         end)
     else stopAllFishing() end
 end)
+Tab1:AddKeybind("Shortcut Blatant", { Default = Enum.KeyCode.L }, function() blatantToggle:Set(not blatantToggle.Value) end)
 
 -- ================= TAB TELEPORT (LENGKAP 14 LOKASI) =================
 local TabT = Window:AddTab("Teleport", UI.Icons.Teleport)
@@ -207,7 +210,7 @@ end)
 Tab2:AddSection("Auto Jual (Market)")
 Tab2:AddInput("Jual Tiap (Menit)", function(t) Config.Interval = tonumber(t) or 60 end)
 Tab2:AddInput("Batas Isi Tas", function(t) Config.Cap = tonumber(t) or 1000 end)
-Tab2:AddToggle("Aktifkan Auto Jual", { Flag = "sale_on" }, function(v)
+local saleToggle = Tab2:AddToggle("Aktifkan Auto Jual", { Flag = "sale_on" }, function(v)
     Config.Sale = v
     if v then
         task.spawn(function()
@@ -227,13 +230,15 @@ Tab2:AddToggle("Aktifkan Auto Jual", { Flag = "sale_on" }, function(v)
         end)
     end
 end)
+Tab2:AddKeybind("Shortcut Jual", { Default = Enum.KeyCode.P }, function() saleToggle:Set(not saleToggle.Value) end)
 
 -- ================= TAB SISTEM =================
 local Tab3 = Window:AddTab("Sistem", UI.Icons.Settings)
-Tab3:AddSection("Recovery")
-Tab3:AddButton("RECOVERY FISHING (Reset)", stopAllFishing)
+Tab3:AddSection("Global Settings")
+Tab3:AddKeybind("Buka/Tutup Menu", { Default = Enum.KeyCode.RightControl }, function() Window:Toggle() end)
+Tab3:AddKeybind("Emergency Recovery", { Default = Enum.KeyCode.X }, stopAllFishing)
 
-Tab3:AddSection("Lainnya")
+Tab3:AddSection("Utility")
 Tab3:AddToggle("Kaku Mode", { Flag = "n_on" }, function(v)
     Config.Kaku = v
     if kakuConn then kakuConn:Disconnect() kakuConn = nil end
@@ -262,4 +267,4 @@ if UI.IsMobile then
     UI.FloatingButton({ Icon = UI.Logos.XanBar, Draggable = true, Callback = function() Window:Toggle() end })
 end
 
-UI.Splash({ Title = "MielHUB", Subtitle = "v1.35 State Machine Turbo", Duration = 2 })
+UI.Splash({ Title = "MielHUB", Subtitle = "v1.60 Final Stability", Duration = 2 })
